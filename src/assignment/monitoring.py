@@ -1,14 +1,11 @@
 """
-Assignment 11 — Monitoring & Alerts starter (TODO).
-
+Assignment 11 — Monitoring & Alerts.
 Tracks block rate, rate-limit hits, judge fail rate.
-Fires alerts when thresholds are exceeded.
 """
 from __future__ import annotations
-
 import json
+import os
 from dataclasses import dataclass, field
-
 
 @dataclass
 class Alert:
@@ -17,17 +14,15 @@ class Alert:
     threshold: float
     message: str
 
-
 @dataclass
 class MonitoringAlert:
     """Aggregate counters from pipeline plugins and emit alerts."""
-
     block_rate_threshold: float = 0.5
     rate_limit_hit_threshold: int = 5
     judge_fail_rate_threshold: float = 0.3
     alerts: list[Alert] = field(default_factory=list)
 
-    # Counters — update these from your pipeline after each request
+    # Các bộ đếm hệ thống
     total_requests: int = 0
     blocked_requests: int = 0
     rate_limit_hits: int = 0
@@ -35,18 +30,52 @@ class MonitoringAlert:
     judge_fails: int = 0
 
     def check_metrics(self) -> list[Alert]:
-        """TODO: compute rates, append Alert objects when thresholds exceeded."""
-        raise NotImplementedError("Implement MonitoringAlert.check_metrics")
+        """Tính toán tỷ lệ và kích hoạt cảnh báo nếu vượt ngưỡng."""
+        self.alerts = []
+        
+        # 1. Kiểm tra tỷ lệ tin nhắn bị chặn (Block Rate)
+        if self.total_requests > 0:
+            block_rate = self.blocked_requests / self.total_requests
+            if block_rate > self.block_rate_threshold:
+                self.alerts.append(Alert(
+                    metric="block_rate",
+                    value=block_rate,
+                    threshold=self.block_rate_threshold,
+                    message=f"Tỷ lệ chặn tin nhắn vượt ngưỡng: {block_rate:.2f} > {self.block_rate_threshold:.2f}"
+                ))
+                
+        # 2. Kiểm tra số lần dính giới hạn tần suất (Rate limit hits)
+        if self.rate_limit_hits > self.rate_limit_hit_threshold:
+            self.alerts.append(Alert(
+                metric="rate_limit_hits",
+                value=float(self.rate_limit_hits),
+                threshold=float(self.rate_limit_hit_threshold),
+                message=f"Số lần dính giới hạn tần suất quá cao: {self.rate_limit_hits} > {self.rate_limit_hit_threshold}"
+            ))
+            
+        # 3. Kiểm tra tỷ lệ Trọng tài AI đánh giá không an toàn (Judge fail rate)
+        if self.judge_checks > 0:
+            judge_fail_rate = self.judge_fails / self.judge_checks
+            if judge_fail_rate > self.judge_fail_rate_threshold:
+                self.alerts.append(Alert(
+                    metric="judge_fail_rate",
+                    value=judge_fail_rate,
+                    threshold=self.judge_fail_rate_threshold,
+                    message=f"Tỷ lệ Trọng tài đánh giá UNSAFE quá cao: {judge_fail_rate:.2f} > {self.judge_fail_rate_threshold:.2f}"
+                ))
+                
+        return self.alerts
 
     def export_json(self, filepath: str = "outputs/metrics.json"):
-        """TODO: write metrics + alerts to JSON."""
-        raise NotImplementedError("Implement MonitoringAlert.export_json")
+        """Xuất chỉ số đo lường ra file JSON."""
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        data = self.snapshot()
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
 
     def snapshot(self) -> dict:
         block_rate = (
-            self.blocked_requests / self.total_requests
-            if self.total_requests
-            else 0.0
+            self.blocked_requests / self.total_requests if self.total_requests else 0.0
         )
         judge_fail_rate = (
             self.judge_fails / self.judge_checks if self.judge_checks else 0.0

@@ -141,15 +141,6 @@ async def llm_safety_check(response_text: str) -> dict:
 
 # ============================================================
 # TODO 6: Implement OutputGuardrailPlugin
-#
-# This plugin checks the agent's output BEFORE sending to the user.
-# Uses after_model_callback to intercept LLM responses.
-# Combines content_filter() and llm_safety_check().
-#
-# NOTE: after_model_callback uses keyword-only arguments.
-#   - llm_response has a .content attribute (types.Content)
-#   - Return the (possibly modified) llm_response, or None to keep original
-# ============================================================
 
 class OutputGuardrailPlugin(base_plugin.BasePlugin):
     """Plugin that checks agent output before sending to user."""
