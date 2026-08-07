@@ -1,26 +1,28 @@
 {
-  "generated_at": "2026-08-07T16:33:20.894871+00:00",
+  "generated_at": "2026-08-07T16:55:12.940045+00:00",
   "submission_dir": "/Users/admin/VinUni/Lab Coach/K4-Lab11-2A202601782-TaThiThuHuyen",
-  "technical_failure": true,
+  "technical_failure": false,
   "packaging": {
-    "ok": false,
+    "ok": true,
     "details": {
-      "report": [],
+      "report": [
+        "2A202601782_report.md"
+      ],
       "audit": true,
       "metrics": true,
       "results": true,
-      "attack_results": false
+      "attack_results": true
     }
   },
   "results_schema": {
     "ok": true,
     "error": null,
     "points": 10,
-    "student_id": "SE00000"
+    "student_id": "2A202601782"
   },
   "public_tests": {
     "returncode": 0,
-    "stdout": ".............                                                            [100%]\n13 passed in 2.82s\n",
+    "stdout": ".............                                                            [100%]\n13 passed in 26.47s\n",
     "stderr": "",
     "technical_failure": false
   },
