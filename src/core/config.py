@@ -4,6 +4,10 @@ Lab 11 — Configuration & API Key Setup
 import os
 
 
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 def setup_api_key():
     """Load Google API key from environment or prompt."""
     if "GOOGLE_API_KEY" not in os.environ:
