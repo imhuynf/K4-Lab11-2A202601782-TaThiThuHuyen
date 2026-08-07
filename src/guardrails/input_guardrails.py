@@ -24,7 +24,16 @@ INJECTION_PATTERNS = (
     r"\b(?:disregard|forget)\s+(?:(?:all|any)\s+)?(?:previous|above|prior|your)\s+(?:instructions?|directives?)\b",
     r"\bbỏ\s+qua\s+(?:(?:mọi|tất\s+cả)\s+)?(?:hướng\s+dẫn|chỉ\s+thị)(?:\s+(?:trước|ở\s+trên)(?:\s+đó)?)?\b",
     r"\bbo\s+qua\s+(?:(?:moi|tat\s+ca)\s+)?(?:huong\s+dan|chi\s+thi)(?:\s+(?:truoc|o\s+tren)(?:\s+do)?)?\b",
+    r"\btranslate\s+(?:all\s+)?(?:your\s+)?(?:instructions?|system\s+prompt|rules?)\b",
+    r"\boutput\s+(?:your\s+)?(?:config|instructions?|prompt)\s+(?:as|in)\s+(?:json|yaml|xml)\b",
+    r"\bfill\s+in\s+(?:the\s+)?(?:blank|blanks)\b.*\b(?:password|api\s*key|database)\b",
+    r"\b(?:ciso|security\s+auditor|developer)\b.*\b(?:password|api\s*key|credential|secret)\b",
+    r"\bwrite\s+(?:a\s+)?story\b.*\b(?:password|api\s*key|credential|secret)\b",
+    r"\bconfirm\b.*\b(?:admin\s+)?password\b",
+    r"\b(?:send|transmit|upload|post)\b.*https?://",
 )
+
+MAX_INPUT_CHARS = 4000
 
 EXTRA_ALLOWED_TOPICS = (
     "bank",
@@ -175,6 +184,12 @@ class InputGuardrailPlugin(base_plugin.BasePlugin):
 
         # Bước 1: Trích xuất nội dung văn bản thô từ đối tượng tin nhắn của người dùng
         text = self._extract_text(user_message)
+
+        if not text.strip() or len(text) > MAX_INPUT_CHARS:
+            self.blocked_count += 1
+            return self._block_response(
+                "Hệ thống phát hiện đầu vào rỗng hoặc vượt quá 4000 ký tự. Yêu cầu đã bị chặn."
+            )
 
         # ============================================================
         # BƯỚC 2: KIỂM TRA LỚP LỌC PHÁT HIỆN TẤN CÔNG (INJECTION DETECTION)

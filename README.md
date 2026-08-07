@@ -2,6 +2,12 @@
 
 Làm sao để ứng dụng agent an toàn hơn?
 
+## Thông tin sinh viên
+
+- **Họ và tên:** Tạ Thị Thu Huyền
+- **MSSV:** 2A202601782
+- **Bài:** Lab 11 — Controlled Agent Security
+
 **Hình thức:** bài tập **cá nhân** (1 người / 1 MSSV).
 
 **Đề bài duy nhất:** [`assignment11.md`](assignment11.md) · Cách nộp: [`SUBMISSION.md`](SUBMISSION.md)
@@ -18,6 +24,7 @@ python -m venv .venv
 # 2) API key
 Copy-Item .env.example .env
 # Mở .env, dán GOOGLE_API_KEY — lấy tại https://aistudio.google.com/apikey
+# Thêm GROQ_API_KEY nếu chạy agent/red-team bằng Groq
 
 # 3) Cài dependency trong venv
 python -m pip install -U pip
@@ -33,6 +40,8 @@ PowerShell (nếu chưa load `.env`):
 
 ```powershell
 $env:GOOGLE_API_KEY="dán-key-của-bạn"
+$env:GROQ_API_KEY="dán-key-của-bạn"
+$env:STUDENT_ID="2A202601782"
 ```
 
 ---
@@ -133,6 +142,16 @@ python main.py --part 4    # sau TODO 11–12
 python main.py --part 5    # sau TODO 8 → outputs/results.json (+ audit/metrics)
 ```
 
+macOS/Linux, chạy trực tiếp từ thư mục gốc repo:
+
+```bash
+source .venv/bin/activate
+export STUDENT_ID="2A202601782"
+PYTHONPATH=src python src/main.py --part 4
+PYTHONPATH=src python src/main.py --part 5
+PYTHONPATH=src python src/main.py --part 1
+```
+
 ```powershell
 pytest tests/smoke -q
 pytest tests/public -q
@@ -173,6 +192,12 @@ Nộp theo [`SUBMISSION.md`](SUBMISSION.md).
 │   ├── agents/guards_agent.py         ← Guards Agent (mục tiêu bonus)
 │   ├── guardrails/ testing/ hitl/     ← Module hỗ trợ phòng thủ
 │   └── main.py
+├── outputs/
+│   ├── results.json
+│   ├── audit_log.json
+│   ├── metrics.json
+│   └── attack_results.json
+├── report/2A202601782_report.md
 ├── notebooks/lab11_guardrails_hitl.ipynb
 ├── schemas/results.schema.json
 ├── scripts/grade.py

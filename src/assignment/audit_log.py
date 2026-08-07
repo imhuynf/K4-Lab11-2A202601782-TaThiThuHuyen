@@ -4,9 +4,14 @@ Records every interaction for forensics.
 """
 from __future__ import annotations
 import json
-import os
 import time
 from datetime import datetime, timezone
+from pathlib import Path
+
+
+DEFAULT_AUDIT_PATH = (
+    Path(__file__).resolve().parents[2] / "outputs" / "audit_log.json"
+)
 
 class AuditLogPlugin:
     """Framework-agnostic audit logger."""
@@ -56,10 +61,11 @@ class AuditLogPlugin:
         self._open.pop(f"{key}_text", None)
         self._open.pop(f"{key}_timestamp", None)
 
-    def export_json(self, filepath: str = "outputs/audit_log.json"):
+    def export_json(self, filepath: str | Path = DEFAULT_AUDIT_PATH):
         """Xuất danh sách nhật ký ra đĩa cứng dưới định dạng JSON."""
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        with open(filepath, "w", encoding="utf-8") as f:
+        output_path = Path(filepath)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with output_path.open("w", encoding="utf-8") as f:
             json.dump(self.logs, f, indent=2, ensure_ascii=False)
 
 def utc_now_iso() -> str:

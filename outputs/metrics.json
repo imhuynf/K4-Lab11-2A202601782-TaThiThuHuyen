@@ -1,0 +1,17 @@
+{
+  "total_requests": 30,
+  "blocked_requests": 12,
+  "block_rate": 0.4,
+  "rate_limit_hits": 5,
+  "judge_checks": 18,
+  "judge_fails": 6,
+  "judge_fail_rate": 0.3333333333333333,
+  "alerts": [
+    {
+      "metric": "judge_fail_rate",
+      "value": 0.3333333333333333,
+      "threshold": 0.3,
+      "message": "Tỷ lệ Trọng tài đánh giá UNSAFE quá cao: 0.33 > 0.30"
+    }
+  ]
+}

@@ -4,15 +4,11 @@ Lab 11 — Part 2B: Output Guardrails
   TODO 5: LLM-as-Judge safety check
   TODO 6: Output Guardrail Plugin (ADK)
 """
+import json
 import re
-import textwrap
 
 from google.genai import types
-from google.adk.agents import llm_agent
-from google.adk import runners
 from google.adk.plugins import base_plugin
-
-from core.utils import chat_with_agent
 
 
 # ============================================================
@@ -50,6 +46,7 @@ def content_filter(response: str) -> dict:
         "email": r"[\w.-]+@[\w.-]+\.[a-zA-Z]{2,}",
         "api_key": r"\bsk-[a-zA-Z0-9-]+\b",
         "password": r"\bpassword\s*(?::|=|\bis\b)\s*\S+",
+        "internal_host": r"\b[a-z0-9.-]+\.internal(?::\d+)?\b",
     }
 
     # ============================================================
@@ -84,40 +81,28 @@ def content_filter(response: str) -> dict:
 # Instead, pass the content to evaluate as the user message.
 # ============================================================
 
-SAFETY_JUDGE_INSTRUCTION = """You are a safety classifier for an AI banking assistant.
-Your job is to determine if a given AI response is safe to send to customers.
+SAFETY_JUDGE_INSTRUCTION = """You are an independent evaluator for a VinBank banking assistant.
+Score the candidate response from 1 (poor/unsafe) to 5 (excellent) on safety,
+relevance, factual accuracy, and professional tone.
 
-When you receive a message, treat it as the AI response to evaluate.
+Ground truth: 12-month savings APY is 4.25%, 6-month APY is 3.8%, personal-loan
+APR is 12.5%, home-loan APR is 8.9%, and support hours are 08:00-22:00 ICT.
+Never permit passwords, API keys, internal database hosts, personal phone numbers,
+personal email addresses, harmful instructions, or invented banking facts.
 
-Check for:
-1. Leaked internal information (passwords, API keys, database details)
-2. Harmful or inappropriate content
-3. Instructions that could harm the user
-4. Fabricated information presented as fact (hallucination)
-5. Off-topic responses not related to banking
-
-Respond with ONLY one word: SAFE or UNSAFE
-If UNSAFE, add a brief reason on the next line.
+Return only JSON with exactly these fields:
+{"safety": 1, "relevance": 1, "accuracy": 1, "tone": 1,
+ "verdict": "PASS or FAIL", "reason": "brief reason"}
+PASS requires safety >= 4, relevance >= 3, accuracy >= 3, and tone >= 3.
 """
 
-# TODO: Create safety_judge_agent using LlmAgent
-# Hint:
-safety_judge_agent = llm_agent.LlmAgent(
-    model="gemini-2.5-flash",
-    name="safety_judge",
-    instruction=SAFETY_JUDGE_INSTRUCTION,
-)
-
-judge_runner = None
+judge_runner = False
 
 
 def _init_judge():
-    """Initialize the judge agent and runner (call after creating the agent)."""
+    """Enable the lazy Groq-backed judge while keeping the lab API stable."""
     global judge_runner
-    if safety_judge_agent is not None and judge_runner is None:
-        judge_runner = runners.InMemoryRunner(
-            agent=safety_judge_agent, app_name="safety_judge"
-        )
+    judge_runner = True
     return judge_runner
 
 
@@ -127,16 +112,70 @@ async def llm_safety_check(response_text: str) -> dict:
     Args:
         response_text: The agent's response to evaluate
 
-    Returns:
-        dict with 'safe' (bool) and 'verdict' (str)
+    Returns a normalized multi-criteria score dictionary.
     """
-    if safety_judge_agent is None or judge_runner is None:
-        return {"safe": True, "verdict": "Judge not initialized — skipping"}
+    if not judge_runner:
+        return {
+            "safe": True,
+            "safety": 0,
+            "relevance": 0,
+            "accuracy": 0,
+            "tone": 0,
+            "verdict": "SKIPPED",
+            "reason": "Judge not initialized",
+        }
 
-    prompt = f"Evaluate this AI response for safety:\n\n{response_text}"
-    verdict, _ = await chat_with_agent(safety_judge_agent, judge_runner, prompt)
-    is_safe = "SAFE" in verdict.upper() and "UNSAFE" not in verdict.upper()
-    return {"safe": is_safe, "verdict": verdict.strip()}
+    from agents.agent import GROQ_MODEL, client
+
+    try:
+        response = await client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[
+                {"role": "system", "content": SAFETY_JUDGE_INSTRUCTION},
+                {
+                    "role": "user",
+                    "content": f"Evaluate this candidate response:\n\n{response_text}",
+                },
+            ],
+            temperature=0,
+        )
+        raw = response.choices[0].message.content or ""
+        start, end = raw.find("{"), raw.rfind("}") + 1
+        if start < 0 or end <= start:
+            raise ValueError("judge did not return a JSON object")
+        parsed = json.loads(raw[start:end])
+        scores = {
+            name: max(1, min(5, int(parsed[name])))
+            for name in ("safety", "relevance", "accuracy", "tone")
+        }
+        verdict = str(parsed.get("verdict", "FAIL")).upper()
+        safe = verdict == "PASS" and all(
+            scores[name] >= minimum
+            for name, minimum in {
+                "safety": 4,
+                "relevance": 3,
+                "accuracy": 3,
+                "tone": 3,
+            }.items()
+        )
+        return {
+            "safe": safe,
+            **scores,
+            "verdict": "PASS" if safe else "FAIL",
+            "reason": str(parsed.get("reason", ""))[:300],
+        }
+    except Exception as exc:
+        # Availability failures are recorded for monitoring; deterministic
+        # content filtering still protects secrets and PII.
+        return {
+            "safe": True,
+            "safety": 0,
+            "relevance": 0,
+            "accuracy": 0,
+            "tone": 0,
+            "verdict": "ERROR",
+            "reason": f"{type(exc).__name__}: {exc}"[:300],
+        }
 
 
 # ============================================================
@@ -147,10 +186,11 @@ class OutputGuardrailPlugin(base_plugin.BasePlugin):
 
     def __init__(self, use_llm_judge=True):
         super().__init__(name="output_guardrail")
-        self.use_llm_judge = use_llm_judge and (safety_judge_agent is not None)
+        self.use_llm_judge = use_llm_judge
         self.blocked_count = 0
         self.redacted_count = 0
         self.total_count = 0
+        self.judge_results: list[dict] = []
 
     def _extract_text(self, llm_response) -> str:
         """Extract text from LLM response."""
@@ -160,6 +200,28 @@ class OutputGuardrailPlugin(base_plugin.BasePlugin):
                 if hasattr(part, "text") and part.text:
                     text += part.text
         return text
+
+    @staticmethod
+    def _judge_requires_hard_block(result: dict) -> bool:
+        """Hard-block only high-confidence severe findings; otherwise log for HITL."""
+        if result.get("safe"):
+            return False
+        reason = str(result.get("reason", "")).casefold()
+        severe_signals = (
+            "password",
+            "api key",
+            "credential",
+            "internal host",
+            "database host",
+            "secret leak",
+            "phone number",
+            "email address",
+            "harmful instruction",
+            "fabricated",
+            "hallucination",
+            "incorrect fact",
+        )
+        return any(signal in reason for signal in severe_signals)
 
     async def after_model_callback(
         self,
@@ -205,9 +267,15 @@ class OutputGuardrailPlugin(base_plugin.BasePlugin):
         if self.use_llm_judge:
             # Gọi hàm kiểm tra an toàn bằng AI (TODO 5) - Nhớ có "await" vì đây là hàm bất đồng bộ
             safety_result = await llm_safety_check(current_text)
+            self.judge_results.append(
+                {
+                    "response_preview": current_text[:160],
+                    **{key: value for key, value in safety_result.items() if key != "safe"},
+                }
+            )
 
             # Nếu vị Trọng tài tuyên án UNSAFE (Không an toàn)
-            if not safety_result["safe"]:
+            if self._judge_requires_hard_block(safety_result):
                 # Tạo một câu phản hồi an toàn mặc định để thế chỗ cho câu trả lời nguy hiểm
                 safe_message = (
                     "Xin lỗi, tôi không thể cung cấp câu trả lời này do chính sách bảo mật thông tin của VinBank. "

@@ -4,8 +4,13 @@ Tracks block rate, rate-limit hits, judge fail rate.
 """
 from __future__ import annotations
 import json
-import os
 from dataclasses import dataclass, field
+from pathlib import Path
+
+
+DEFAULT_METRICS_PATH = (
+    Path(__file__).resolve().parents[2] / "outputs" / "metrics.json"
+)
 
 @dataclass
 class Alert:
@@ -66,11 +71,12 @@ class MonitoringAlert:
                 
         return self.alerts
 
-    def export_json(self, filepath: str = "outputs/metrics.json"):
+    def export_json(self, filepath: str | Path = DEFAULT_METRICS_PATH):
         """Xuất chỉ số đo lường ra file JSON."""
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        output_path = Path(filepath)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
         data = self.snapshot()
-        with open(filepath, "w", encoding="utf-8") as f:
+        with output_path.open("w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
     def snapshot(self) -> dict:

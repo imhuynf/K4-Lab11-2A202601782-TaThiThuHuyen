@@ -35,6 +35,12 @@ class RateLimitPlugin(base_plugin.BasePlugin):
             parts=[types.Part.from_text(text=message)],
         )
 
+    def reset(self) -> None:
+        """Start a fresh measurement window for an isolated test run."""
+        self.user_windows.clear()
+        self.blocked_count = 0
+        self.total_count = 0
+
     async def on_user_message_callback(self, *, invocation_context, user_message):
         """Return Content to block, or None to allow."""
         self.total_count += 1
